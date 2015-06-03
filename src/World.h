@@ -40,10 +40,18 @@ namespace arm_slam
 
             ofVec2f GetGradient(int x, int y)
             {
+                /*
                 float d0 = GetDist(x, y);
                 float dx = GetDist(x + 1, y);
                 float dy = GetDist(x, y + 1);
                 return ofVec2f(dx - d0, dy - d0) * d0;
+                */
+
+                int dxplus = (int)Collides(x + 1, y);
+                int dyplus = (int)Collides(x, y + 1);
+                int dxminus = (int)Collides(x - 1, y);
+                int dyminus = (int)Collides(x, y - 1);
+                return ofVec2f((dxplus - dxminus) * 0.5f, (dyplus - dyminus) * 0.5f);
 
             }
 
@@ -61,8 +69,6 @@ namespace arm_slam
                     }
                 }
             }
-
-
 
             ofImage data;
             ofImage distdata;

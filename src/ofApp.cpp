@@ -20,14 +20,17 @@ void ofApp::setup()
     robot.root->localTranslation = ofVec2f(ofGetWidth() / 2, ofGetHeight() / 2);
     fakeRobot.root->localTranslation = robot.root->localTranslation;
     odomRobot.root->localTranslation = robot.root->localTranslation;
-
-
+    tsdf.Initialize(world, 32.0f);
+    tsdfImg.allocate(tsdf.width, tsdf.height, OF_IMAGE_COLOR_ALPHA);
+    tsdf.SetColors(&tsdfImg);
+    experimentMode = UnconstraintedDescent;
 }
 
 //--------------------------------------------------------------
 void ofApp::update()
 {
-
+    ofVec2f odomEE = odomRobot.GetEEPos();
+    float odomRotation = odomRobot.camera->globalRotation;
     if(mouseX > 0 && mouseY > 0)
     {
         ofVec2f ee = robot.GetEEPos();
@@ -36,19 +39,53 @@ void ofApp::update()
         arm_slam::Robot<3>::Config curr = robot.GetQ();
         robot.SetQ(curr + vel * 1e-5);
         robot.Update(world);
-        arm_slam::Robot<3>::Config perturbation = vel * 1e-5 * ofRandom(0.1f, 1.9f);
+        arm_slam::Robot<3>::Config perturbation = vel * 1e-5 * ofRandom(-0.01f, 1.5f);
         arm_slam::Robot<3>::Config fake = fakeRobot.GetQ() + perturbation;
         fakeRobot.SetQ(fake);
         arm_slam::Robot<3>::Config odom = odomRobot.GetQ() + perturbation;
         odomRobot.SetQ(odom);
+
     }
 
     fakeRobot.Update(world);
     odomRobot.Update(world);
 
+    ofVec2f odomEEAfter = odomRobot.GetEEPos();
+    float odomRotationAfter = odomRobot.camera->globalRotation;
+
     fakeRobot.camera->points = robot.camera->points;
-    fakeRobot.camera->ComputeGradients(world);
-    fakeRobot.GradientDescent(1, -1e-6);
+    fakeRobot.camera->noisyPoints = robot.camera->noisyPoints;
+
+    switch(experimentMode)
+    {
+        case GroundTruth:
+        {
+            fakeRobot.SetQ(robot.GetQ());
+            break;
+        }
+        case Odometry:
+        {
+            break;
+        }
+        case ConstrainedDescent:
+        {
+            fakeRobot.GradientDescent(100, -1e-7, tsdf);
+            break;
+        }
+        case UnconstraintedDescent:
+        {
+            freeCamera.localRotation += (odomRotationAfter - odomRotation);
+            freeCamera.localTranslation += (odomEEAfter - odomEE);
+            freeCamera.points = robot.camera->points;
+            freeCamera.noisyPoints = robot.camera->noisyPoints;
+            freeCamera.UpdateRecursive();
+            freeCamera.ComputeGradients(tsdf, true);
+            freeCamera.FreeGradientDescent(tsdf, 100, 0.5f, -1e-6);
+            break;
+        }
+    }
+
+    offset = fakeRobot.GetQ() + odomRobot.GetQ() * -1.0f;
 
     if(errs.size() > 500)
     {
@@ -59,7 +96,24 @@ void ofApp::update()
 
     float err = (delta.Transpose() * delta)[0];
     errs.push_back(err);
+    robot.camera->ComputeGradients(world, false);
 
+    switch(experimentMode)
+    {
+        case ConstrainedDescent:
+        case GroundTruth:
+        case Odometry:
+        {
+            tsdf.FuseRayCloud(fakeRobot.camera->globalTranslation, fakeRobot.camera->globalRotation, fakeRobot.camera->noisyPoints, robot.camera->gradients);
+            tsdf.SetColors(&tsdfImg);
+            break;
+        }
+        case UnconstraintedDescent:
+        {
+            tsdf.FuseRayCloud(freeCamera.globalTranslation, freeCamera.globalRotation, freeCamera.noisyPoints,  robot.camera->gradients);
+            tsdf.SetColors(&tsdfImg);
+        }
+    }
 }
 
 //--------------------------------------------------------------
@@ -69,8 +123,19 @@ void ofApp::draw()
     ofClear(0);
     ofSetColor(255, 255, 255);
     world.data.draw(0, 0);
+    tsdfImg.draw(0, 0);
     robot.Draw(false);
-    fakeRobot.Draw(true);
+    switch(experimentMode)
+    {
+        case ConstrainedDescent:
+        case GroundTruth:
+        case Odometry:
+            fakeRobot.Draw(true);
+            break;
+        case UnconstraintedDescent:
+            freeCamera.Draw();
+            break;
+    }
     odomRobot.Draw(false);
     ofSetLineWidth(1);
     ofSetColor(0, 100, 100);
@@ -78,6 +143,7 @@ void ofApp::draw()
     ofLine(mouseX, mouseY, ee.x, ee.y);
 
 
+    /*
     ofSetColor(255, 0, 0);
     for(size_t i = 0; i < errs.size() - 1; i++)
     {
@@ -91,6 +157,7 @@ void ofApp::draw()
         ss << errs[errs.size() - 1];
         ofDrawBitmapString(ss.str(), 1, 15);
     }
+    */
 }
 
 //--------------------------------------------------------------
