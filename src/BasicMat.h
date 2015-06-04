@@ -60,12 +60,12 @@ namespace arm_slam
                 return m[idx];
             }
 
-            float& operator()(size_t r, size_t c)
+            float& operator()(size_t r, size_t c = 0)
             {
                 return (*this)[r * M + c];
             }
 
-            const float& operator()(size_t r, size_t c) const
+            const float& operator()(size_t r, size_t c  = 0) const
             {
                 return (*this)[r * M + c];
             }

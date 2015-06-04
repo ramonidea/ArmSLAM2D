@@ -1,4 +1,5 @@
 #include "ofApp.h"
+#include <fstream>
 
 //--------------------------------------------------------------
 void ofApp::setup()
@@ -13,7 +14,7 @@ void ofApp::setup()
     robot.Initialize(linkLengths);
     fakeRobot.Initialize(linkLengths);
     odomRobot.Initialize(linkLengths);
-    arm_slam::Robot<3>::Config config = robot.GetQ();
+    Robot::Config config = robot.GetQ();
     robot.SetQ(config);
     fakeRobot.SetQ(config);
     odomRobot.SetQ(config);
@@ -24,6 +25,85 @@ void ofApp::setup()
     tsdfImg.allocate(tsdf.width, tsdf.height, OF_IMAGE_COLOR_ALPHA);
     tsdf.SetColors(&tsdfImg);
     experimentMode = UnconstraintedDescent;
+    jointNoiseScale = 0.25f;
+    zeroCalibration = GetJointNoise(robot.GetQ());
+    writeTrajectory = false;
+    readTrajectory = true;
+    writeExperimentData = true;
+    iter = 0;
+
+    if (readTrajectory)
+    {
+        LoadTrajectory();
+    }
+}
+
+void ofApp::LoadTrajectory()
+{
+    std::ifstream inputStream;
+    inputStream.open("./data/traj.txt", std::ios::in);
+
+    while (!inputStream.eof())
+    {
+        float a, b, c;
+        inputStream >> a;
+        inputStream >> b;
+        inputStream >> c;
+        Config config;
+        config(0) = a;
+        config(1) = b;
+        config(2) = c;
+        recordedTrajectory.push_back(config);
+    }
+}
+
+ofApp::Robot::Config ofApp::GetJointNoise(const  Robot::Config& curr)
+{
+    Robot::Config perturbation;
+    perturbation[0] = jointNoiseScale * (ofNoise((float)curr(0), (float)curr(1), (float)curr(2) + 0.5f) - 0.5f);
+    perturbation[1] = jointNoiseScale * (ofNoise((float)curr(0), (float)curr(1) + 0.5f, (float)curr(2)) - 0.5f);
+    perturbation[2] = jointNoiseScale * (ofNoise((float)curr(0) + 0.5f, (float)curr(1), (float)curr(2)) - 0.5f);
+    return perturbation;
+}
+
+void ofApp::AppendExperimentDatum()
+{
+    ExperimentDatum datum;
+    datum.odomConfig = odomRobot.GetQ();
+    datum.trackConfig = fakeRobot.GetQ();
+    datum.robotConfig = robot.GetQ();
+
+    ofVec2f truePos = robot.GetEEPos();
+    ofVec2f trackPos = fakeRobot.GetEEPos();
+    switch (experimentMode)
+    {
+        case GroundTruth:
+        case ConstrainedDescent:
+        case Odometry:
+            datum.eePosError = (truePos - trackPos).length();
+            break;
+        case UnconstraintedDescent:
+            datum.eePosError = (truePos - freeCamera.globalTranslation).length();
+            break;
+    }
+
+    tsdf.ComputeError(world, datum.classificationError, datum.tsdfError);
+    experimentData.push_back(datum);
+}
+
+void ofApp::SaveExperimentData()
+{
+    std::ofstream stream;
+    stream.open("./data/experiment.txt", std::ios::out);
+
+    for (size_t i = 0; i < experimentData.size(); i++)
+    {
+        ExperimentDatum& datum = experimentData.at(i);
+        stream << datum.tsdfError << " " << datum.classificationError << " " << datum.eePosError
+                << " " << datum.odomConfig(0) << " " << datum.odomConfig(1) << " " << datum.odomConfig(2)
+                << " " << datum.trackConfig(0) << " " << datum.trackConfig(1) << " " << datum.trackConfig(2)
+                << " " << datum.robotConfig(0) << " " << datum.robotConfig(1) << " " << datum.robotConfig(2) << std::endl;
+    }
 }
 
 //--------------------------------------------------------------
@@ -31,20 +111,51 @@ void ofApp::update()
 {
     ofVec2f odomEE = odomRobot.GetEEPos();
     float odomRotation = odomRobot.camera->globalRotation;
-    if(mouseX > 0 && mouseY > 0)
+    if((mouseX > 0 && mouseY > 0) || readTrajectory)
     {
-        ofVec2f ee = robot.GetEEPos();
-        ofVec2f force = ee - ofVec2f(mouseX, mouseY);
-        arm_slam::Robot<3>::Config vel = robot.ComputeJacobianTransposeMove(force);
-        arm_slam::Robot<3>::Config curr = robot.GetQ();
-        robot.SetQ(curr + vel * 1e-5);
+        Robot::Config curr;
+        if(!readTrajectory)
+        {
+            ofVec2f ee = robot.GetEEPos();
+            ofVec2f force = ee - ofVec2f(mouseX, mouseY);
+            Robot::Config vel = robot.ComputeJacobianTransposeMove(force);
+            curr = robot.GetQ();
+            robot.SetQ(curr + vel * 1e-5);
+        }
+        else
+        {
+            if(iter < recordedTrajectory.size())
+            {
+                robot.SetQ(recordedTrajectory[iter]);
+                curr = robot.GetQ();
+            }
+            else
+            {
+                SaveExperimentData();
+                exit();
+            }
+        }
         robot.Update(world);
-        arm_slam::Robot<3>::Config perturbation = vel * 1e-5 * ofRandom(-0.01f, 1.5f);
-        arm_slam::Robot<3>::Config fake = fakeRobot.GetQ() + perturbation;
-        fakeRobot.SetQ(fake);
-        arm_slam::Robot<3>::Config odom = odomRobot.GetQ() + perturbation;
-        odomRobot.SetQ(odom);
-
+        Robot::Config perturbation = GetJointNoise(curr) + zeroCalibration * -1.0f;
+        switch (experimentMode)
+        {
+            case GroundTruth:
+            {
+                fakeRobot.SetQ(robot.GetQ());
+                Robot::Config odom = robot.GetQ() + perturbation;
+                odomRobot.SetQ(odom);
+                break;
+            }
+            case Odometry:
+            case UnconstraintedDescent:
+            case ConstrainedDescent:
+                Robot::Config fake = robot.GetQ() + offset + perturbation;
+                fakeRobot.SetQ(fake);
+                Robot::Config odom = robot.GetQ() + perturbation;
+                odomRobot.SetQ(odom);
+                break;
+        }
+        iter++;
     }
 
     fakeRobot.Update(world);
@@ -53,9 +164,11 @@ void ofApp::update()
     ofVec2f odomEEAfter = odomRobot.GetEEPos();
     float odomRotationAfter = odomRobot.camera->globalRotation;
 
+    robot.camera->ComputeGradients(world, false);
     fakeRobot.camera->points = robot.camera->points;
     fakeRobot.camera->noisyPoints = robot.camera->noisyPoints;
-
+    fakeRobot.camera->ComputeGradients(tsdf, true);
+    //fakeRobot.camera->gradients = robot.camera->gradients;
     switch(experimentMode)
     {
         case GroundTruth:
@@ -92,11 +205,10 @@ void ofApp::update()
         errs.erase(errs.begin());
     }
 
-    arm_slam::Robot<3>::Config delta = fakeRobot.GetQ() + robot.GetQ() * -1;
+    Robot::Config delta = fakeRobot.GetQ() + robot.GetQ() * -1;
 
     float err = (delta.Transpose() * delta)[0];
     errs.push_back(err);
-    robot.camera->ComputeGradients(world, false);
 
     switch(experimentMode)
     {
@@ -113,6 +225,16 @@ void ofApp::update()
             tsdf.FuseRayCloud(freeCamera.globalTranslation, freeCamera.globalRotation, freeCamera.noisyPoints,  robot.camera->gradients);
             tsdf.SetColors(&tsdfImg);
         }
+    }
+
+    if (writeTrajectory)
+    {
+        recordedTrajectory.push_back(robot.GetQ());
+    }
+
+    if (readTrajectory)
+    {
+        AppendExperimentDatum();
     }
 }
 
@@ -160,17 +282,35 @@ void ofApp::draw()
     */
 }
 
+void ofApp::SaveTrajectory()
+{
+    std::ofstream stream;
+    stream.open("./data/traj.txt", std::ios::out);
+
+    for (size_t i = 0; i < recordedTrajectory.size(); i++)
+    {
+        Config& config = recordedTrajectory.at(i);
+        stream << config(0) << " " << config(1) << " " << config(2) << std::endl;
+    }
+}
+
 //--------------------------------------------------------------
 void ofApp::keyPressed(int key)
 {
     if(key == 'r')
     {
-        arm_slam::Robot<3>::Config curr = fakeRobot.GetQ();
-        arm_slam::Robot<3>::Config randConfig;
+        Robot::Config curr = fakeRobot.GetQ();
+        Robot::Config randConfig;
         randConfig[0] = ofRandom(-0.1f, 0.1f);
         randConfig[1] = ofRandom(-0.1f, 0.1f);
         randConfig[2] = ofRandom(-0.1f, 0.1f);
         fakeRobot.SetQ(curr + randConfig);
+    }
+
+    if (key == 's' && writeTrajectory)
+    {
+        SaveTrajectory();
+        exit();
     }
 }
 

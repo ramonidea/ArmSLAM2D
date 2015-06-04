@@ -101,7 +101,6 @@ namespace arm_slam
                     if(gradients.size() > 0)
                     {
                         float pointmult = 1.0f / gradients.size();
-                        printf("Trans gradient %f %f, rot %f\n", transGradient.x, transGradient.y, rotGradient);
                         localTranslation -= transGradient * translationStep * pointmult;
                         localRotation -= rotGradient * rotationStep * pointmult;
                         UpdateRecursive();
@@ -112,6 +111,7 @@ namespace arm_slam
 
             virtual void Draw()
             {
+                const bool hasGradients = gradients.size() > 0;
                 for(size_t i = 0; i < noisyPoints.size(); i++)
                 {
                     ofVec2f pi = globalTranslation + noisyPoints[i].getRotatedRad(-globalRotation);
@@ -119,10 +119,12 @@ namespace arm_slam
                     ofSetLineWidth(1);
                     ofLine(globalTranslation, pi);
 
-
-                    ofSetColor(255, 0, 0);
-                    ofSetLineWidth(1);
-                    ofLine(pi, pi + gradients[i]);
+                    if(hasGradients)
+                    {
+                        ofSetColor(255, 0, 0);
+                        ofSetLineWidth(1);
+                        ofLine(pi, pi + gradients[i]);
+                    }
 
                 }
             }

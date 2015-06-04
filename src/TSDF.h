@@ -173,6 +173,43 @@ namespace arm_slam
                 SetWeight((int)pos.x, (int)pos.y, oldWeight + weight);
             }
 
+            inline void ComputeError(arm_slam::World& world, float& classificationError, float& distError)
+            {
+                distError = 0;
+                classificationError = 0;
+                size_t num = 0;
+                size_t numIncorrect = 0;
+                for (int x = 0; x < width; x++)
+                {
+                    for (int y = 0; y < height; y++)
+                    {
+                        float weight = GetWeight(x, y);
+
+                        if (weight > 0)
+                        {
+                            num++;
+                            float dist = GetDist(x, y);
+                            float wDist = world.GetDist(x, y);
+
+                            bool myClass = dist < 0;
+                            bool worldClass = wDist < 0;
+                            distError += pow(dist - wDist, 2);
+
+                            if (myClass != worldClass)
+                            {
+                                numIncorrect++;
+                            }
+                        }
+                    }
+                }
+
+                if (num > 0)
+                {
+                    //distError /= num;
+                    classificationError = (float)numIncorrect / (float)num;
+                }
+            }
+
             float truncation;
             std::vector<float> dist;
             std::vector<float> weight;

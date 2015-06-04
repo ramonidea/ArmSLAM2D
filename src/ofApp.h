@@ -8,12 +8,24 @@
 class ofApp: public ofBaseApp
 {
     public:
+        typedef arm_slam::Robot<3> Robot;
+        typedef Robot::Config Config;
         enum Experiment
         {
             GroundTruth,
             Odometry,
             ConstrainedDescent,
             UnconstraintedDescent
+        };
+
+        struct ExperimentDatum
+        {
+                Config robotConfig;
+                Config odomConfig;
+                Config trackConfig;
+                float tsdfError;
+                float classificationError;
+                float eePosError;
         };
 
         void setup();
@@ -30,15 +42,28 @@ class ofApp: public ofBaseApp
         void dragEvent(ofDragInfo dragInfo);
         void gotMessage(ofMessage msg);
 
-        arm_slam::Robot<3> robot;
-        arm_slam::Robot<3> fakeRobot;
-        arm_slam::Robot<3> odomRobot;
+        void LoadTrajectory();
+        void SaveTrajectory();
+        void AppendExperimentDatum();
+        void SaveExperimentData();
+        Config GetJointNoise(const  arm_slam::Robot<3>::Config& curr);
+
+        Robot robot;
+        Robot fakeRobot;
+        Robot odomRobot;
         arm_slam::DepthCamera freeCamera;
-        arm_slam::Robot<3>::Config offset;
+        Config offset;
+        Config zeroCalibration;
         arm_slam::World world;
         arm_slam::TSDF tsdf;
         ofImage tsdfImg;
         std::vector<float> errs;
         Experiment experimentMode;
-
+        float jointNoiseScale;
+        bool writeTrajectory;
+        bool readTrajectory;
+        bool writeExperimentData;
+        size_t iter;
+        std::vector<Config> recordedTrajectory;
+        std::vector<ExperimentDatum> experimentData;
 };
