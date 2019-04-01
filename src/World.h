@@ -14,14 +14,14 @@ namespace arm_slam
 
             bool IsValid(int x, int y)
             {
-                return x >= 0 && x < data.width && y >= 0 && y < data.height;
+                return x >= 0 && x < data.getWidth() && y >= 0 && y < data.getHeight();
             }
 
             bool Collides(int x, int y)
             {
                 if(IsValid(x, y))
                 {
-                    return collisionBuffer[(x + y * data.width)];
+                    return collisionBuffer[(x + y * data.getWidth())];
                 }
                 return true;
             }
@@ -30,7 +30,7 @@ namespace arm_slam
             {
                 if(IsValid(x, y))
                 {
-                    return signedDistance[(x + y * data.width)];
+                    return signedDistance[(x + y * data.getWidth())];
                 }
                 else
                 {
@@ -57,15 +57,15 @@ namespace arm_slam
 
             void Initialize()
             {
-                collisionBuffer.resize(data.width * data.height);
-                signedDistance.resize(distdata.width * distdata.height);
-                for (int x = 0; x< data.width; x++)
+                collisionBuffer.resize(data.getWidth() * data.getHeight());
+                signedDistance.resize(distdata.getWidth() * distdata.getHeight());
+                for (int x = 0; x< data.getWidth(); x++)
                 {
-                    for(int y = 0; y < data.height; y++)
+                    for(int y = 0; y < data.getHeight(); y++)
                     {
-                        collisionBuffer[x + y * data.width] = data.getColor(x, y).r == 0;
+                        collisionBuffer[x + y * data.getWidth()] = data.getColor(x, y).r == 0;
                         ofColor dist = distdata.getColor(x, y);
-                        signedDistance[x + y * data.width] = (float)dist.r - (float)dist.g;
+                        signedDistance[x + y * data.getWidth()] = (float)dist.r - (float)dist.g;
                     }
                 }
             }
@@ -78,4 +78,4 @@ namespace arm_slam
 
 }
 
-#endif // WORLD_H_ 
+#endif // WORLD_H_

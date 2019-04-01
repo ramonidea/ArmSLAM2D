@@ -35,7 +35,7 @@ namespace arm_slam
                     float t = globalRotation + dt;
                     ofVec2f dir(cos(t), -sin(t));
 
-                    for (float dl = 0; dl < map.data.width * map.data.height; dl+=1)
+                    for (float dl = 0; dl < map.data.getWidth() * map.data.getHeight(); dl+=1)
                     {
                         ofVec2f p = dir * dl + globalTranslation;
                         if(!map.IsValid((int)p.x, (int)p.y))
@@ -117,13 +117,13 @@ namespace arm_slam
                     ofVec2f pi = globalTranslation + noisyPoints[i].getRotatedRad(-globalRotation);
                     ofSetColor(100, 100, 100);
                     ofSetLineWidth(1);
-                    ofLine(globalTranslation, pi);
+                    ofDrawLine(globalTranslation, pi);
 
                     if(hasGradients)
                     {
                         ofSetColor(255, 0, 0);
                         ofSetLineWidth(1);
-                        ofLine(pi, pi + gradients[i]);
+                        ofDrawLine(pi, pi + gradients[i]);
                     }
 
                 }
@@ -142,4 +142,4 @@ namespace arm_slam
             float maxAngle;
     };
 }
-#endif // DEPTHCAMERA_H_ 
+#endif // DEPTHCAMERA_H_

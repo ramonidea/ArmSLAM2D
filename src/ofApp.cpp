@@ -9,7 +9,7 @@ void ofApp::setup()
     world.Initialize();
     float linkLengths[] = {50.0f, 40.0f, 25.0f};
     robot.color = ofColor(200, 10, 10);
-    fakeRobot.color = ofColor(100, 100, 200, 100);
+    fakeRobot.color = ofColor(255, 255, 255, 100);
     odomRobot.color = ofColor(100, 200, 100, 100);
     robot.Initialize(linkLengths);
     fakeRobot.Initialize(linkLengths);
@@ -24,11 +24,12 @@ void ofApp::setup()
     tsdf.Initialize(world, 32.0f);
     tsdfImg.allocate(tsdf.width, tsdf.height, OF_IMAGE_COLOR_ALPHA);
     tsdf.SetColors(&tsdfImg);
-    experimentMode = UnconstraintedDescent;
+    experimentMode = ConstrainedDescent;
     jointNoiseScale = 0.25f;
     zeroCalibration = GetJointNoise(robot.GetQ());
-    writeTrajectory = false;
+    writeTrajectory = true;
     readTrajectory = true;
+    //readTrajectory = false;
     writeExperimentData = true;
     iter = 0;
 

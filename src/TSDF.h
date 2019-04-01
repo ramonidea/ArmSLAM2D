@@ -24,7 +24,7 @@ namespace arm_slam
 
             void Initialize(World& world, float t)
             {
-                Initialize(world.data.width, world.data.height, t);
+                Initialize(world.data.getWidth(), world.data.getHeight(), t);
 
                 for(int x = 0; x < width; x++)
                 {
@@ -220,4 +220,4 @@ namespace arm_slam
 
 }
 
-#endif // TSDF_H_ 
+#endif // TSDF_H_

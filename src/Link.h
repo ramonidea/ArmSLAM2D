@@ -36,7 +36,7 @@ namespace arm_slam
                 else
                 {
 
-                    ofLine(parent->globalTranslation, globalTranslation);
+                    ofDrawLine(parent->globalTranslation, globalTranslation);
                 }
                 Node::DrawRecursive();
             }
@@ -45,4 +45,4 @@ namespace arm_slam
     };
 }
 
-#endif // LINK_H_ 
+#endif // LINK_H_
